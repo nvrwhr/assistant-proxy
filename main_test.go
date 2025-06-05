@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -27,11 +28,18 @@ func startStubAPI(t *testing.T) (*httptest.Server, *stubResponse) {
 		}
 		var req struct {
 			Messages []Message `json:"messages"`
+			Stream   bool      `json:"stream"`
 		}
 		json.NewDecoder(r.Body).Decode(&req)
 		store.Received = append([]Message(nil), req.Messages...)
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
+		if req.Stream {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n"))
+			w.Write([]byte("data: [DONE]\n\n"))
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
+		}
 	}))
 	return srv, store
 }
@@ -104,5 +112,43 @@ func TestRedisMemory(t *testing.T) {
 	msgs, err := store.GetMessages("1")
 	if err != nil || len(msgs) == 0 {
 		t.Errorf("expected messages stored in redis")
+	}
+}
+
+func TestStreaming(t *testing.T) {
+	apiSrv, _ := startStubAPI(t)
+	defer apiSrv.Close()
+	loadEnv(t, apiSrv.URL)
+
+	targetURL, _ := url.Parse(apiSrv.URL)
+	store, err := NewSQLiteStore(os.Getenv("SQLITE_PATH"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := http.NewServeMux()
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+	handler.HandleFunc("/v1/responses", func(w http.ResponseWriter, r *http.Request) {
+		handleResponses(w, r, store, targetURL, "")
+	})
+	handler.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		proxy.ServeHTTP(w, r)
+	})
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	reqBody := map[string]any{"thread_id": "s1", "model": "gpt", "stream": true, "messages": []Message{{Role: "user", Content: "hello"}}}
+	b, _ := json.Marshal(reqBody)
+	resp, err := http.Post(srv.URL+"/v1/responses", "application/json", bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !bytes.Contains(data, []byte("data:")) {
+		t.Fatalf("expected streaming data, got %s", string(data))
+	}
+	msgs, _ := store.GetMessages("s1")
+	if len(msgs) < 2 || msgs[len(msgs)-1].Role != "assistant" {
+		t.Fatalf("assistant message not stored: %v", msgs)
 	}
 }

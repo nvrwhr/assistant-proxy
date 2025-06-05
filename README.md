@@ -21,3 +21,9 @@ go build
 ## Usage
 
 Run the binary after creating the `.env` file. The proxy listens on `:8080`.
+
+### Streaming
+
+If the request payload includes `"stream": true`, the proxy streams responses
+back to the client using the standard SSE format and still records the final
+assistant message in the selected backend.

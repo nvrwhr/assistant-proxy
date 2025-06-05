@@ -20,6 +20,7 @@ type chatRequest struct {
 	ThreadID string    `json:"thread_id,omitempty"`
 	Model    string    `json:"model"`
 	Messages []Message `json:"messages"`
+	Stream   bool      `json:"stream,omitempty"`
 }
 
 func main() {
