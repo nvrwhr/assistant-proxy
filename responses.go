@@ -28,6 +28,8 @@ func registerPaths(router *mux.Router, proxy *httputil.ReverseProxy, store Memor
 }
 
 func handleResponses(w http.ResponseWriter, r *http.Request, store Memory, target *url.URL, apiKey string) {
+	log.WithField("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<", nil)
+
 	log.WithFields(log.Fields{"path": r.URL.Path, "method": r.Method}).Debug("incoming request")
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
