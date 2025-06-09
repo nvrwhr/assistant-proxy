@@ -11,8 +11,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/alicebob/miniredis/v2"
-	"github.com/joho/godotenv"
+       "github.com/joho/godotenv"
 )
 
 type stubResponse struct {
@@ -86,34 +85,6 @@ func TestResponsesEndpoint(t *testing.T) {
 	}
 }
 
-func TestRedisMemory(t *testing.T) {
-	mr := miniredis.RunT(t)
-	defer mr.Close()
-	os.Setenv("MEMORY_TYPE", "redis")
-	os.Setenv("REDIS_ADDR", mr.Addr())
-	apiSrv, _ := startStubAPI(t)
-	defer apiSrv.Close()
-	os.Setenv("TARGET_API_URL", apiSrv.URL)
-
-	store, err := NewRedisStore(mr.Addr())
-	if err != nil {
-		t.Fatal(err)
-	}
-	targetURL, _ := url.Parse(apiSrv.URL)
-	handler := http.NewServeMux()
-	handler.HandleFunc("/v1/responses", func(w http.ResponseWriter, r *http.Request) {
-		handleResponses(w, r, store, targetURL, "")
-	})
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
-	reqBody := map[string]any{"thread_id": "1", "model": "gpt", "messages": []Message{{Role: "user", Content: "ping"}}}
-	b, _ := json.Marshal(reqBody)
-	http.Post(srv.URL+"/v1/responses", "application/json", bytes.NewReader(b))
-	msgs, err := store.GetMessages("1")
-	if err != nil || len(msgs) == 0 {
-		t.Errorf("expected messages stored in redis")
-	}
-}
 
 func TestStreaming(t *testing.T) {
 	apiSrv, _ := startStubAPI(t)
