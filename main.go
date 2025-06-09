@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 
+	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
 )
@@ -53,8 +54,8 @@ func main() {
 
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
 
-	mux := http.NewServeMux()
-	registerPaths(mux, proxy, store, targetURL, apiKey)
+	router := mux.NewRouter()
+	registerPaths(router, proxy, store, targetURL, apiKey)
 	log.Info("Listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	log.Fatal(http.ListenAndServe(":8080", router))
 }
