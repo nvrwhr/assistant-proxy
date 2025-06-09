@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	log "github.com/sirupsen/logrus"
 )
 
 const responsesPath = "/v1/responses"
@@ -26,13 +27,16 @@ func registerPaths(mux *http.ServeMux, proxy *httputil.ReverseProxy, store Memor
 }
 
 func handleResponses(w http.ResponseWriter, r *http.Request, store Memory, target *url.URL, apiKey string) {
+	log.WithFields(log.Fields{"path": r.URL.Path, "method": r.Method}).Debug("incoming request")
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		log.WithField("method", r.Method).Warn("invalid method")
 		return
 	}
 	var req chatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.WithError(err).Warn("failed to decode request")
 		return
 	}
 	if req.ThreadID == "" {
@@ -41,12 +45,19 @@ func handleResponses(w http.ResponseWriter, r *http.Request, store Memory, targe
 	for _, m := range req.Messages {
 		if err := store.SaveMessage(req.ThreadID, m); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.WithError(err).Error("failed to save message")
 			return
 		}
 	}
 	allMsgs, err := store.GetMessages(req.ThreadID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.WithError(err).Error("failed to load messages")
+		return
+	}
+	if len(allMsgs) == 0 {
+		http.Error(w, "messages field is required", http.StatusBadRequest)
+		log.Warn("no messages provided")
 		return
 	}
 	payload := map[string]any{
@@ -57,6 +68,7 @@ func handleResponses(w http.ResponseWriter, r *http.Request, store Memory, targe
 		payload["stream"] = true
 	}
 	body, _ := json.Marshal(payload)
+	log.WithField("payload", string(body)).Debug("forwarding to openai")
 	openaiURL := *target
 	openaiURL.Path = "/v1/chat/completions"
 	proxyReq, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, openaiURL.String(), bytes.NewReader(body))
@@ -71,6 +83,7 @@ func handleResponses(w http.ResponseWriter, r *http.Request, store Memory, targe
 	resp, err := http.DefaultClient.Do(proxyReq)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
+		log.WithError(err).Error("request to openai failed")
 		return
 	}
 	defer resp.Body.Close()
@@ -105,12 +118,15 @@ func handleResponses(w http.ResponseWriter, r *http.Request, store Memory, targe
 			}
 		}
 		if assistant.Len() > 0 {
-			store.SaveMessage(req.ThreadID, Message{Role: "assistant", Content: assistant.String()})
+			if err := store.SaveMessage(req.ThreadID, Message{Role: "assistant", Content: assistant.String()}); err != nil {
+				log.WithError(err).Error("failed to save assistant message")
+			}
 		}
 	} else {
 		assistantBody, err := io.ReadAll(resp.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
+			log.WithError(err).Error("failed to read openai response")
 			return
 		}
 		var parsed struct {
@@ -120,7 +136,9 @@ func handleResponses(w http.ResponseWriter, r *http.Request, store Memory, targe
 		}
 		_ = json.Unmarshal(assistantBody, &parsed)
 		if len(parsed.Choices) > 0 {
-			store.SaveMessage(req.ThreadID, parsed.Choices[0].Message)
+			if err := store.SaveMessage(req.ThreadID, parsed.Choices[0].Message); err != nil {
+				log.WithError(err).Error("failed to save assistant message")
+			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(assistantBody)

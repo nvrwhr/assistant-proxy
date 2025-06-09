@@ -1,13 +1,13 @@
 package main
 
 import (
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 
 	"github.com/joho/godotenv"
+	log "github.com/sirupsen/logrus"
 )
 
 // Message models a chat message.
@@ -55,6 +55,6 @@ func main() {
 
 	mux := http.NewServeMux()
 	registerPaths(mux, proxy, store, targetURL, apiKey)
-	log.Println("Listening on :8080")
+	log.Info("Listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))
 }
