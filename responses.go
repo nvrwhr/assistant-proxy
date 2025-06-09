@@ -12,16 +12,17 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
 )
 
 const responsesPath = "/v1/responses"
 
-func registerPaths(mux *http.ServeMux, proxy *httputil.ReverseProxy, store Memory, targetURL *url.URL, apiKey string) {
-	mux.HandleFunc(responsesPath, func(w http.ResponseWriter, r *http.Request) {
+func registerPaths(router *mux.Router, proxy *httputil.ReverseProxy, store Memory, targetURL *url.URL, apiKey string) {
+	router.HandleFunc(responsesPath, func(w http.ResponseWriter, r *http.Request) {
 		handleResponses(w, r, store, targetURL, apiKey)
 	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	router.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		proxy.ServeHTTP(w, r)
 	})
 }
