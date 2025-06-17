@@ -43,7 +43,7 @@ func handleResponses(w http.ResponseWriter, r *http.Request, store Memory, targe
 	if req.ThreadID == "" {
 		req.ThreadID = uuid.NewString()
 	}
-	for _, m := range req.Messages {
+	for _, m := range req.Input {
 		if err := store.SaveMessage(req.ThreadID, m); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			log.WithError(err).Error("failed to save message")
@@ -56,14 +56,22 @@ func handleResponses(w http.ResponseWriter, r *http.Request, store Memory, targe
 		log.WithError(err).Error("failed to load messages")
 		return
 	}
-	if len(allMsgs) == 0 {
-		http.Error(w, "messages field is required", http.StatusBadRequest)
-		log.Warn("no messages provided")
-		return
+	messages := make([]Message, 0, len(allMsgs)+1)
+	if req.Instructions != "" {
+		messages = append(messages, Message{Role: "system", Content: req.Instructions})
+	}
+	role := "user"
+	for _, m := range allMsgs {
+		messages = append(messages, Message{Role: role, Content: m})
+		if role == "user" {
+			role = "assistant"
+		} else {
+			role = "user"
+		}
 	}
 	payload := map[string]any{
 		"model":    req.Model,
-		"messages": allMsgs,
+		"messages": messages,
 	}
 	if req.Stream {
 		payload["stream"] = true
@@ -108,18 +116,23 @@ func handleResponses(w http.ResponseWriter, r *http.Request, store Memory, targe
 					Choices []struct {
 						Delta struct {
 							Content string `json:"content"`
+							Text    string `json:"text"`
 						} `json:"delta"`
 					} `json:"choices"`
 				}
 				if json.Unmarshal([]byte(data), &event) == nil {
 					if len(event.Choices) > 0 {
-						assistant.WriteString(event.Choices[0].Delta.Content)
+						c := event.Choices[0].Delta.Content
+						if c == "" {
+							c = event.Choices[0].Delta.Text
+						}
+						assistant.WriteString(c)
 					}
 				}
 			}
 		}
 		if assistant.Len() > 0 {
-			if err := store.SaveMessage(req.ThreadID, Message{Role: "assistant", Content: assistant.String()}); err != nil {
+			if err := store.SaveMessage(req.ThreadID, assistant.String()); err != nil {
 				log.WithError(err).Error("failed to save assistant message")
 			}
 		}
@@ -132,13 +145,26 @@ func handleResponses(w http.ResponseWriter, r *http.Request, store Memory, targe
 		}
 		var parsed struct {
 			Choices []struct {
-				Message Message `json:"message"`
+				Message struct {
+					Content string `json:"content"`
+					Text    string `json:"text"`
+				} `json:"message"`
+				Text string `json:"text"`
 			} `json:"choices"`
 		}
 		_ = json.Unmarshal(assistantBody, &parsed)
 		if len(parsed.Choices) > 0 {
-			if err := store.SaveMessage(req.ThreadID, parsed.Choices[0].Message); err != nil {
-				log.WithError(err).Error("failed to save assistant message")
+			content := parsed.Choices[0].Message.Content
+			if content == "" {
+				content = parsed.Choices[0].Message.Text
+			}
+			if content == "" {
+				content = parsed.Choices[0].Text
+			}
+			if content != "" {
+				if err := store.SaveMessage(req.ThreadID, content); err != nil {
+					log.WithError(err).Error("failed to save assistant message")
+				}
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
