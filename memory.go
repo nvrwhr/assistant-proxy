@@ -2,6 +2,6 @@ package main
 
 // Memory defines the interface for storing chat messages.
 type Memory interface {
-	SaveMessage(threadID string, msg Message) error
-	GetMessages(threadID string) ([]Message, error)
+	SaveMessage(threadID string, msg string) error
+	GetMessages(threadID string) ([]string, error)
 }

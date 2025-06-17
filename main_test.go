@@ -11,7 +11,7 @@ import (
 	"os"
 	"testing"
 
-       "github.com/joho/godotenv"
+	"github.com/joho/godotenv"
 )
 
 type stubResponse struct {
@@ -73,18 +73,17 @@ func TestResponsesEndpoint(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
 
-	reqBody := map[string]any{"model": "gpt", "messages": []Message{{Role: "user", Content: "hi"}}}
+	reqBody := map[string]any{"model": "gpt", "instructions": "do it", "input": []string{"hi"}}
 	b, _ := json.Marshal(reqBody)
 	resp, err := http.Post(srv.URL+"/v1/responses", "application/json", bytes.NewReader(b))
 	if err != nil {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if len(apiStore.Received) != 1 || apiStore.Received[0].Content != "hi" {
+	if len(apiStore.Received) != 2 || apiStore.Received[0].Role != "system" || apiStore.Received[1].Content != "hi" {
 		t.Fatalf("unexpected messages: %v", apiStore.Received)
 	}
 }
-
 
 func TestStreaming(t *testing.T) {
 	apiSrv, _ := startStubAPI(t)
@@ -107,7 +106,7 @@ func TestStreaming(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
 
-	reqBody := map[string]any{"thread_id": "s1", "model": "gpt", "stream": true, "messages": []Message{{Role: "user", Content: "hello"}}}
+	reqBody := map[string]any{"thread_id": "s1", "model": "gpt", "stream": true, "instructions": "do", "input": []string{"hello"}}
 	b, _ := json.Marshal(reqBody)
 	resp, err := http.Post(srv.URL+"/v1/responses", "application/json", bytes.NewReader(b))
 	if err != nil {
@@ -119,7 +118,7 @@ func TestStreaming(t *testing.T) {
 		t.Fatalf("expected streaming data, got %s", string(data))
 	}
 	msgs, _ := store.GetMessages("s1")
-	if len(msgs) < 2 || msgs[len(msgs)-1].Role != "assistant" {
+	if len(msgs) < 2 || msgs[len(msgs)-1] != "ok" {
 		t.Fatalf("assistant message not stored: %v", msgs)
 	}
 }
