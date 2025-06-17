@@ -54,18 +54,11 @@ func main() {
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
-
-<<<<<<< HEAD
-	router := mux.NewRouter()
-	registerPaths(router, proxy, store, targetURL, apiKey)
-	log.Info("Listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", router))
-=======
 	port := os.Getenv("PORT")
 
-	mux := http.NewServeMux()
-	registerPaths(mux, proxy, store, targetURL, apiKey)
+	router := mux.NewRouter()
+	registerPaths(router, proxy, store, targetURL, apiKey)
 	log.Info("Listening on :" + port)
-	log.Fatal(http.ListenAndServe(":"+port, mux))
->>>>>>> d7d7208 (Improve logging with logrus (#2))
+	log.Fatal(http.ListenAndServe(":"+port, router))
+
 }

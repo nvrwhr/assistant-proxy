@@ -1,0 +1,22 @@
+{
+  "name": "assistant-proxy",
+  "version": "1.0.0",
+  "description": "This project provides a simple reverse proxy for OpenAI-compatible APIs with a custom `/v1/responses` endpoint. All requests are forwarded to the configured target API except `/v1/responses`, which stores conversation history using a configurable backend and forwards the conversation to the target chat completion endpoint.",
+  "main": "index.js",
+  "scripts": {
+    "start": "nodemon --exec \"go run .\" -e go"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nvrwhr/assistant-proxy.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/nvrwhr/assistant-proxy/issues"
+  },
+  "homepage": "https://github.com/nvrwhr/assistant-proxy#readme",
+  "dependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

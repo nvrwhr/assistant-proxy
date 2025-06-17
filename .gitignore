@@ -1,3 +1,4 @@
 .env
 history.db
 *.db
+node_modules
